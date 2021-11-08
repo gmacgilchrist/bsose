@@ -21,7 +21,14 @@ def load_bsose():
     ds_csnaps = ds_csnaps.rename({'time':'time_snaps','TRAC01':'TRAC01_snaps'}).drop('iter')
     # Specify shift of time axis for snapshots
     ds_csnaps['time_snaps'].attrs['c_grid_axis_shift']=-0.5
-
+    
+    ### T and S ###
+    # Load T and S
+    filenames = 'bsose_i133_2013to2018_5day_Theta.nc'
+    ds_t = xr.open_mfdataset(rootdir+niter+'/'+freq+'/'+filenames,chunks={'time':chunks})
+    filenames = 'bsose_i133_2013to2018_5day_Salt.nc'
+    ds_s = xr.open_mfdataset(rootdir+niter+'/'+freq+'/'+filenames,chunks={'time':chunks})
+    
     ### VOLUME BUDGET ###
     # Load velocity data
     filenames = 'bsose_i133_2013to2018_5day_*vel.nc'
@@ -42,7 +49,7 @@ def load_bsose():
     ds_fw = ds_fw.coarsen(time=5,boundary='trim',keep_attrs=True).mean().assign_coords({'time':ds_vel['time']})
 
     # Merge to full dataset
-    ds = xr.merge([ds,ds_csnaps,ds_vel,ds_surf,ds_ssh,ds_sshsnaps,ds_fw])
+    ds = xr.merge([ds,ds_csnaps,ds_t,ds_s,ds_vel,ds_surf,ds_ssh,ds_sshsnaps,ds_fw])
 
     # Define vertical metrics as negative, to account for descending coordinate
     ds['drW'] = ds.hFacW * ds.drF #vertical cell size at u point
