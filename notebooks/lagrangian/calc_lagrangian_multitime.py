@@ -1,3 +1,4 @@
+#!/home/aos/graemem/miniconda3/envs/parcels/bin/python
 # Master file for calculating trajectories in BSOSE
 
 import xarray as xr
@@ -15,19 +16,27 @@ from parcels import FieldSet, ParticleSet, JITParticle, AdvectionRK4_3D, ErrorCo
 # ----------
 N = 50
 
-dt = 360 # minutes
+dt = 180 # minutes
 outputdt = 30 # days
-runtime = 10*365 # days
+runtime = 6*365 # days
 
-locinit = "Drake-upstream" # Drake, Ross
-timedir = "forw" # forw, back
+locinit = "coral-approx" # Drake, Drake-upstream, Ross
+timedir = "back" # forw, back
+multitimes = True # initialize at multiple different times
+Nt = 12 # Number of initialized times
+Dt = 6 # 5-day multiples; spacing between initialization time
 
 # Returns
 # -------
 fileout = ("output"
            +".locinit_"+locinit
+           +".Np_"+str(N)
            +".timedir_"+timedir
-           +".ntime_"+str(runtime)+".nc")
+           +".ntime_"+str(runtime)
+           +".dt_"+str(dt))
+if multitimes:
+    fileout+=".itimes_N"+str(Nt)+"_D"+str(Dt)
+fileout+=".nc"
 
 print("Saving trajectories to : "+fileout)
 
@@ -65,7 +74,12 @@ def particledelete(particle, fieldset, time):
 # TIME-LOOPING
 # ------------
 # Check if time-loop required based on runtime
-if runtime>6*365:
+if multitimes:
+    maxt = runtime+Nt*Dt*5
+else:
+    maxt = runtime
+    
+if maxt>=6*365:
     time_periodic = timedelta(runtime)
 else:
     time_periodic=False
@@ -118,48 +132,91 @@ elif locinit=="Ross":
     lats1D = np.linspace(-75.5,-70,N)
     lons1D = 210
     depths1D= -1*np.linspace(100,3000,N)
-    
 elif locinit=="Drake-upstream":
-    lats1D = np.linspace(-75,-55,N)
-    lons1D = np.arange(231,291,10)
+    lats1D = np.linspace(-80,-55,N)
+    lons1D = np.arange(201,291,10)
     depths1D = -1*np.linspace(200,3000,N)
-
-# Series of initializations for upstream of Drake
-elif locinit=="Drake-10":
-    lats1D = np.linspace(-75,-55,N)
-    lons1D = (291-10)
-    depths1D = -1*np.linspace(200,3000,N)
-elif locinit=="Drake-20":
-    lats1D = np.linspace(-75,-55,N)
-    lons1D = (291-20)
-    depths1D = -1*np.linspace(200,3000,N)
-elif locinit=="Drake-30":
-    lats1D = np.linspace(-75,-55,N)
-    lons1D = (291-30)
-    depths1D = -1*np.linspace(200,3000,N)
-elif locinit=="Drake-40":
-    lats1D = np.linspace(-75,-55,N)
-    lons1D = (291-40)
-    depths1D = -1*np.linspace(200,3000,N)
-elif locinit=="Drake-50":
-    lats1D = np.linspace(-75,-55,N)
-    lons1D = (291-50)
-    depths1D = -1*np.linspace(200,3000,N)
-elif locinit=="Drake-60":
-    lats1D = np.linspace(-75,-55,N)
-    lons1D = (291-60)
-    depths1D = -1*np.linspace(200,3000,N)
+else:
+    lats1D = np.empty(0)
+    lons1D = np.empty(0)
+    depths1D = np.empty(0)
     
 [lons,lats,depths] = np.meshgrid(lons1D,lats1D,depths1D)
 
+# To initialize at approximate coral locations
+if locinit=="coral":
+    df = pd.read_excel('Coral_Locations.xlsx',engine='openpyxl')
+    lats = np.empty(0)
+    lons = np.empty(0)
+    depths = np.empty(0)
+    for name in df['names'].unique():
+        lon = 360-df[df['names']==name]['Longitude'].iloc[0]
+        lat = -1*df[df['names']==name]['Latitude'].iloc[0]
+        depthmin = -1*df[df['names']==name]['Depth'].min()
+        depthmax = -1*df[df['names']==name]['Depth'].max()
+
+        latV = [lat-0.5,lat+0.5]
+        depthV = [np.round(depthmax,-1)-10,np.round(depthmin,-1)+10]
+
+        lons1D = lon
+        lats1D = np.linspace(latV[0],latV[1],N)
+        depths1D = np.linspace(depthV[0],depthV[1],N)
+
+        [lons1,lats1,depths1] = np.meshgrid(lons1D,lats1D,depths1D)
+
+        lons = np.concatenate((lons,lons1.flatten()))
+        lats = np.concatenate((lats,lats1.flatten()))
+        depths = np.concatenate((depths,depths1.flatten()))
+elif locinit=="coral-approx":
+    locs = {'pink':{'lat':[-60.5,-59.5],'depth':[-2000,-400]},
+           'green':{'lat':[-57.5,-56.5],'depth':[-2000,-400]}}
+    lats = np.empty(0)
+    lons = np.empty(0)
+    depths = np.empty(0)
+    for loc in locs.keys():
+        lon = 360-66
+        latV = locs[loc]['lat']
+        depthV = locs[loc]['depth']
+
+        lons1D =  lon
+        lats1D = np.linspace(latV[0],latV[1],N)
+        depths1D = np.arange(depthV[0],depthV[1]+10,10)
+
+        [lons1,lats1,depths1] = np.meshgrid(lons1D,lats1D,depths1D)
+
+        lons = np.concatenate((lons,lons1.flatten()))
+        lats = np.concatenate((lats,lats1.flatten()))
+        depths = np.concatenate((depths,depths1.flatten()))
+
 # Get start time based on direction
 if timedir == "back":
-    times=fs.U.grid.time[-1]
+    itimes = -1
     dtsign = -1
 elif timedir == "forw":
-    times=fs.U.grid.time[0]
+    itimes = 0
     dtsign = 1
     
+if multitimes:
+    Dt = dtsign*Dt
+    ftime = itimes
+    ltime = ftime+Dt*Nt
+    itimes = np.arange(ftime,ltime,Dt)
+    
+times=fs.U.grid.time[itimes]
+
+if multitimes:
+    npart = len(lons.flatten())
+    times = np.repeat(times,npart)
+    
+    lons = np.tile(lons.flatten(),Nt)
+    lats = np.tile(lats.flatten(),Nt)
+    depths = np.tile(depths.flatten(),Nt)
+
+print("ntimes: "+str(len(times.flatten())))
+print("nlons: "+str(len(lons.flatten())))
+print("nlats: "+str(len(lats.flatten())))
+print("ndepths: "+str(len(depths.flatten())))
+
 pset = ParticleSet(fieldset=fs, pclass=TSMLDParticle,
                   lon=lons,lat=lats,depth=depths,time=times)
 
