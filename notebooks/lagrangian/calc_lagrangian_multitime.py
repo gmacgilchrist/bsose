@@ -14,23 +14,27 @@ from parcels import FieldSet, ParticleSet, JITParticle, AdvectionRK4_3D, ErrorCo
 
 # Parameters
 # ----------
-N = 50
+Nh = 50
+Nz = 100
 
 dt = 180 # minutes
-outputdt = 30 # days
-runtime = 6*365 # days
+outputdt = 5 # days
+runtime = 1*365 # days
 
-locinit = "coral-approx" # Drake, Drake-upstream, Ross
+locinit = "RossShelf" # Drake, Drake-upstream, Ross, coral, coral-approx, RossShelf.?
 timedir = "back" # forw, back
-multitimes = True # initialize at multiple different times
+multitimes = False # initialize at multiple different times
 Nt = 12 # Number of initialized times
 Dt = 6 # 5-day multiples; spacing between initialization time
+
+# For locinit==shelf, locations are derived in calc_init_shelf.ipynb and loaded from there
 
 # Returns
 # -------
 fileout = ("output"
            +".locinit_"+locinit
-           +".Np_"+str(N)
+           +".Nh_"+str(Nh)
+           +".Nz_"+str(Nz)
            +".timedir_"+timedir
            +".ntime_"+str(runtime)
            +".dt_"+str(dt))
@@ -125,17 +129,17 @@ def periodicBC(particle, fieldset, time):
 
 # Get runtime details based on parameters
 if locinit=="Drake":
-    lats1D = np.linspace(-61.5,-55.5,N)
+    lats1D = np.linspace(-61.5,-55.5,Nh)
     lons1D = 291
-    depths1D = -1*np.linspace(200,2200,N)
+    depths1D = -1*np.linspace(200,2200,Nh)
 elif locinit=="Ross":
-    lats1D = np.linspace(-75.5,-70,N)
+    lats1D = np.linspace(-75.5,-70,Nh)
     lons1D = 210
-    depths1D= -1*np.linspace(100,3000,N)
+    depths1D= -1*np.linspace(100,3000,Nz)
 elif locinit=="Drake-upstream":
-    lats1D = np.linspace(-80,-55,N)
+    lats1D = np.linspace(-80,-55,Nh)
     lons1D = np.arange(201,291,10)
-    depths1D = -1*np.linspace(200,3000,N)
+    depths1D = -1*np.linspace(200,3000,Nz)
 else:
     lats1D = np.empty(0)
     lons1D = np.empty(0)
@@ -159,8 +163,8 @@ if locinit=="coral":
         depthV = [np.round(depthmax,-1)-10,np.round(depthmin,-1)+10]
 
         lons1D = lon
-        lats1D = np.linspace(latV[0],latV[1],N)
-        depths1D = np.linspace(depthV[0],depthV[1],N)
+        lats1D = np.linspace(latV[0],latV[1],Nh)
+        depths1D = np.linspace(depthV[0],depthV[1],Nz)
 
         [lons1,lats1,depths1] = np.meshgrid(lons1D,lats1D,depths1D)
 
@@ -179,7 +183,7 @@ elif locinit=="coral-approx":
         depthV = locs[loc]['depth']
 
         lons1D =  lon
-        lats1D = np.linspace(latV[0],latV[1],N)
+        lats1D = np.linspace(latV[0],latV[1],Nh)
         depths1D = np.arange(depthV[0],depthV[1]+10,10)
 
         [lons1,lats1,depths1] = np.meshgrid(lons1D,lats1D,depths1D)
@@ -188,6 +192,38 @@ elif locinit=="coral-approx":
         lats = np.concatenate((lats,lats1.flatten()))
         depths = np.concatenate((depths,depths1.flatten()))
 
+if locinit=="RossShelf":
+    path = "../../data/RossShelf.level1000.sep500.maxd5000.txt"
+    init = np.loadtxt(path)
+    initlon = init[0,:]
+    initlat = init[1,:]
+    dh = 0.1
+    
+    lats = np.empty(0)
+    lons = np.empty(0)
+    depths = np.empty(0)
+
+    for i in range(len(initlon)):
+        lon = initlon[i]
+        lat = initlat[i]
+
+        depthmin = 0
+        depthmax = 1000
+
+        lonV = [lon-dh/2,lon+dh/2]
+        latV = [lat-dh/2,lat+dh/2]
+        depthV = [depthmin,depthmax]
+
+        lons1D =  np.linspace(lonV[0],lonV[1],Nh)
+        lats1D = np.linspace(latV[0],latV[1],Nh)
+        depths1D = -1*np.linspace(depthV[0],depthV[1],Nz)
+
+        [lons1,lats1,depths1] = np.meshgrid(lons1D,lats1D,depths1D)
+
+        lons = np.concatenate((lons,lons1.flatten()))
+        lats = np.concatenate((lats,lats1.flatten()))
+        depths = np.concatenate((depths,depths1.flatten()))
+        
 # Get start time based on direction
 if timedir == "back":
     itimes = -1
