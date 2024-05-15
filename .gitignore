@@ -1,4 +1,5 @@
 # Netcdf
+*.zarr
 *.nc
 # parcels output
 *.npy

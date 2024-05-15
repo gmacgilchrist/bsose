@@ -1,10 +1,20 @@
 import xarray as xr
 from xgcm import Grid
 
-def load_bsose():
-    
-    rootdir = '/local/data/bSOSE/'
-    niter = 'iter133NEW'
+def getpaths_bsose(variables,rootdir='/work/e786/e786/shared/datasets/bSOSE',
+                   niter=133,
+                   freq='5day',
+                   ):
+    filename_prefix = 'bsose_i'+str(niter)+'_2013to2018_'+freq+'_'
+    filename_suffix = '.nc'
+    variables = ['MLD']
+    paths = []
+    for variable in variables:
+        filename = filename_prefix+variable+filename_suffix
+        paths.append(rootdir+'/ITER'+str(niter)+'/'+filename)
+    return paths
+
+def load_bsose_OLD(rootdir, niter):
     freq = '5day'
     chunks = 1
 

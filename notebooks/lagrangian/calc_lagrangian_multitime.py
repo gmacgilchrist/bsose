@@ -10,7 +10,7 @@ from dask.diagnostics import ProgressBar
 import os
 from datetime import timedelta
 
-from parcels import FieldSet, ParticleSet, JITParticle, AdvectionRK4_3D, ErrorCode, Variable
+from parcels import FieldSet, ParticleSet, JITParticle, AdvectionRK4_3D, StatusCode, Variable
 
 # Parameters
 # ----------
@@ -19,9 +19,9 @@ Nz = 100
 
 dt = 180 # minutes
 outputdt = 5 # days
-runtime = 1*365 # days
+runtime = 15 #1*365 # days
 
-locinit = "RossShelf" # Drake, Drake-upstream, Ross, coral, coral-approx, RossShelf.?
+locinit = "Shelf" # Drake, Drake-upstream, Ross, coral, coral-approx, RossShelf.?, Shelf.?
 timedir = "back" # forw, back
 multitimes = False # initialize at multiple different times
 Nt = 12 # Number of initialized times
@@ -40,19 +40,19 @@ fileout = ("output"
            +".dt_"+str(dt))
 if multitimes:
     fileout+=".itimes_N"+str(Nt)+"_D"+str(Dt)
-fileout+=".nc"
+fileout+=".zarr"
 
 print("Saving trajectories to : "+fileout)
 
 ############
 
-# SAMPLING KERNELS for T & S
+# KERNELS
 # --------------------------
+# SAMPLING T, S, MLD
 class TSMLDParticle(JITParticle):
     T = Variable('T', dtype=np.float32)
     S = Variable('S', dtype=np.float32)
     MLD = Variable('MLD', dtype=np.float32)
-
 def SampleTSMLD(particle, fieldset, time):
     particle.T = fieldset.T[time,
                             particle.depth,
@@ -67,6 +67,7 @@ def SampleTSMLD(particle, fieldset, time):
                                 particle.lat,
                                 particle.lon]
 
+# Deleting particles that enter the mixed layer
 def mixedlayerdelete(particle, fieldset, time):
     # Absolute depth
     if -1*particle.depth <= particle.MLD:
@@ -74,6 +75,10 @@ def mixedlayerdelete(particle, fieldset, time):
         
 def particledelete(particle, fieldset, time):
     particle.delete()
+
+def DeleteErrorParticle(particle, fieldset, time):
+    if particle.state == StatusCode.ErrorOutOfBounds:
+        particle.delete()
         
 # TIME-LOOPING
 # ------------
@@ -90,7 +95,7 @@ else:
 
 # FIELD SET
 # ---------
-rootdir = "/local/data/bSOSE/iter133NEW/5day/"
+rootdir = "/work/e786/e786/shared/datasets/bSOSE/ITER133/"
 filenames = {'U':rootdir+'bsose_i133_2013to2018_5day_Uvel.nc',
              'V':rootdir+'bsose_i133_2013to2018_5day_Vvel.nc',
              'W':rootdir+'bsose_i133_2013to2018_5day_Wvel.nc',
@@ -192,8 +197,11 @@ elif locinit=="coral-approx":
         lats = np.concatenate((lats,lats1.flatten()))
         depths = np.concatenate((depths,depths1.flatten()))
 
-if locinit=="RossShelf":
-    path = "../../data/RossShelf.level1000.sep500.maxd5000.txt"
+if (locinit=="RossShelf") or (locinit=="Shelf"):
+    if locinit=="RossShelf":
+        path = "../../data/RossShelf.level1000.sep500.maxd5000.txt"
+    elif locinit=="Shelf":
+        path = "../../data/Shelf.level-1000.sep-500.txt"
     init = np.loadtxt(path)
     initlon = init[0,:]
     initlat = init[1,:]
@@ -263,10 +271,9 @@ output_file = pset.ParticleFile(name=fileout, outputdt=timedelta(days=outputdt))
 
 # RUN
 # ---
-kernel = AdvectionRK4_3D + pset.Kernel(SampleTSMLD) + pset.Kernel(mixedlayerdelete) + pset.Kernel(periodicBC)
+kernel = AdvectionRK4_3D + pset.Kernel(SampleTSMLD) + pset.Kernel(mixedlayerdelete) + pset.Kernel(periodicBC) + pset.Kernel(DeleteErrorParticle)
 pset.execute(kernel,
              runtime=timedelta(days=runtime),
              dt=dtsign*timedelta(minutes=dt),
-             output_file=output_file,
-             recovery={ErrorCode.ErrorOutOfBounds: particledelete})
+             output_file=output_file)
 output_file.export()
