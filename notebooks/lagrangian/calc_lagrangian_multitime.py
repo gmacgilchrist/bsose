@@ -14,12 +14,12 @@ from parcels import FieldSet, ParticleSet, JITParticle, AdvectionRK4_3D, StatusC
 
 # Parameters
 # ----------
-Nh = 50
-Nz = 100
+Nh = 10
+Nz = 20
 
-dt = 180 # minutes
-outputdt = 5 # days
-runtime = 15 #1*365 # days
+dt = 360 # minutes
+outputdt = 10 # days
+runtime = 6*365 #1*365 # days
 
 locinit = "Shelf" # Drake, Drake-upstream, Ross, coral, coral-approx, RossShelf.?, Shelf.?
 timedir = "back" # forw, back
@@ -95,7 +95,7 @@ else:
 
 # FIELD SET
 # ---------
-rootdir = "/work/e786/e786/shared/datasets/bSOSE/ITER133/"
+rootdir = "/gws/nopw/j04/co2clim/datasets/bSOSE/ITER133/"
 filenames = {'U':rootdir+'bsose_i133_2013to2018_5day_Uvel.nc',
              'V':rootdir+'bsose_i133_2013to2018_5day_Vvel.nc',
              'W':rootdir+'bsose_i133_2013to2018_5day_Wvel.nc',
@@ -125,9 +125,9 @@ fs.add_periodic_halo(zonal=True)
 
 def periodicBC(particle, fieldset, time):
     if particle.lon < fieldset.halo_west:
-        particle.lon += fieldset.halo_east - fieldset.halo_west
+        particle_dlon += fieldset.halo_east - fieldset.halo_west
     elif particle.lon > fieldset.halo_east:
-        particle.lon -= fieldset.halo_east - fieldset.halo_west
+        particle_dlon -= fieldset.halo_east - fieldset.halo_west
 
 # PARTICLE SET
 # ------------
@@ -197,12 +197,16 @@ elif locinit=="coral-approx":
         lats = np.concatenate((lats,lats1.flatten()))
         depths = np.concatenate((depths,depths1.flatten()))
 
+# To initialise on Antarctic shelf
 if (locinit=="RossShelf") or (locinit=="Shelf"):
     if locinit=="RossShelf":
         path = "../../data/RossShelf.level1000.sep500.maxd5000.txt"
     elif locinit=="Shelf":
         path = "../../data/Shelf.level-1000.sep-500.txt"
     init = np.loadtxt(path)
+    # hack to correct for different way that initialisation locations are saved
+    if locinit=="Shelf":
+        init=np.transpose(init)
     initlon = init[0,:]
     initlat = init[1,:]
     dh = 0.1
@@ -271,9 +275,8 @@ output_file = pset.ParticleFile(name=fileout, outputdt=timedelta(days=outputdt))
 
 # RUN
 # ---
-kernel = AdvectionRK4_3D + pset.Kernel(SampleTSMLD) + pset.Kernel(mixedlayerdelete) + pset.Kernel(periodicBC) + pset.Kernel(DeleteErrorParticle)
+kernel = AdvectionRK4_3D + pset.Kernel(SampleTSMLD) + pset.Kernel(mixedlayerdelete) +  pset.Kernel(periodicBC) + pset.Kernel(DeleteErrorParticle)
 pset.execute(kernel,
              runtime=timedelta(days=runtime),
              dt=dtsign*timedelta(minutes=dt),
              output_file=output_file)
-output_file.export()
