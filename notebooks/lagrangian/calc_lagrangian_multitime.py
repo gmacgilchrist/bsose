@@ -14,20 +14,20 @@ from parcels import FieldSet, ParticleSet, JITParticle, AdvectionRK4_3D, StatusC
 
 # Parameters
 # ----------
-Nh = 10
-Nz = 20
+Nh = 25
+Nz = 100
 
 dt = 360 # minutes
 outputdt = 10 # days
 runtime = 6*365 #1*365 # days
 
-locinit = "Shelf" # Drake, Drake-upstream, Ross, coral, coral-approx, RossShelf.?, Shelf.?
+locinit = "DotsonPine-shallow" # Drake, Drake-upstream, Ross, coral, coral-approx, RossShelf.?, Shelf.?, DotsonPine.?
 timedir = "back" # forw, back
 multitimes = False # initialize at multiple different times
 Nt = 12 # Number of initialized times
 Dt = 6 # 5-day multiples; spacing between initialization time
 
-# For locinit==shelf, locations are derived in calc_init_shelf.ipynb and loaded from there
+# For locinit==shelf (or RossShelf, or DotsonPine), locations are derived in calc_init_shelf.ipynb and loaded from there
 
 # Returns
 # -------
@@ -198,14 +198,23 @@ elif locinit=="coral-approx":
         depths = np.concatenate((depths,depths1.flatten()))
 
 # To initialise on Antarctic shelf
-if (locinit=="RossShelf") or (locinit=="Shelf"):
+if (locinit=="RossShelf") or (locinit=="Shelf") or (locinit=="DotsonPine") or (locinit=="DotsonPine-shallow"):
     if locinit=="RossShelf":
         path = "../../data/RossShelf.level1000.sep500.maxd5000.txt"
+        depthmin, depthmax = 0, 1000
     elif locinit=="Shelf":
         path = "../../data/Shelf.level-1000.sep-500.txt"
+        depthmin, depthmax = 0, 1000
+    elif locinit=="DotsonPine":
+        path = "../../data/DotsonPine.level-1000.sep-530.startpoint-x241y-72.maxd-600.txt"
+        depthmin, depthmax = 0, 1000
+    elif locinit=="DotsonPine-shallow":
+        path = "../../data/DotsonPine.level-1000.sep-530.startpoint-x241y-72.maxd-600.txt"
+        depthmin, depthmax = 150, 400
     init = np.loadtxt(path)
+    # print(init)
     # hack to correct for different way that initialisation locations are saved
-    if locinit=="Shelf":
+    if (locinit=="Shelf") or (locinit=="DotsonPine") or (locinit=="DotsonPine-shallow"):
         init=np.transpose(init)
     initlon = init[0,:]
     initlat = init[1,:]
@@ -218,9 +227,6 @@ if (locinit=="RossShelf") or (locinit=="Shelf"):
     for i in range(len(initlon)):
         lon = initlon[i]
         lat = initlat[i]
-
-        depthmin = 0
-        depthmax = 1000
 
         lonV = [lon-dh/2,lon+dh/2]
         latV = [lat-dh/2,lat+dh/2]
